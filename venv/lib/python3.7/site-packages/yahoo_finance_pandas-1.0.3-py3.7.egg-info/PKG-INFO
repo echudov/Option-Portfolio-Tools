@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: yahoo-finance-pandas
+Version: 1.0.3
+Summary: Stock and Option data from Yahoo Finance returned in Pandas DataFrames
+Home-page: https://github.com/BrianDAllen/yahoo_finance_pandas
+Author: abn
+Author-email: abn@aol.com
+License: MIT
+Description: UNKNOWN
+Platform: UNKNOWN
