@@ -8,8 +8,11 @@ class Security:
     def __init__(self, ticker):
         self.ticker = ticker
 
-    def value(self, price, time, P, **kwargs):
+    def value(self, price, time, **kwargs):
         raise Exception("Not Implemented")
+
+    def prob_weighted_val(self, P, time, **kwargs):
+        return pt.integrate_probability(P, lambda p: p)
 
     def delta(self, price, time, accuracy=0.01):
         return (self.value(price + 0.5 * accuracy, time) - self.value(price - 0.5 * accuracy, time)) / accuracy
@@ -22,7 +25,8 @@ class Option(Security):
         self.strike = strike
         self.expiry = expiry
 
-    def value(self, price, time, P, **kwargs):
+    # currently, since only black-scholes is implemented, that's all I use to value the option :/
+    def value(self, price, time, **kwargs):
         r = kwargs.get("r")
         sigma = kwargs.get("sigma")
         model = kwargs.get("model")
@@ -33,6 +37,10 @@ class Option(Security):
         if model == 'black':
             return opt.black_scholes(self.strike, time, r, sigma, price, option_type=self.option_type)
 
+    # find the expected value across a given probability distribution
+    # This is incredibly expensive, and the root of most of the execution time, but there isn't much I can do
+    # Since there is no way to algebraically evaluate this for an arbitrary probability distribution
+    # Especially when the distribution is discreet/non approximatable by a basic function
     def prob_weighted_val(self, P, time, **kwargs):
         r = kwargs.get("r")
         sigma = kwargs.get("sigma")
@@ -40,37 +48,60 @@ class Option(Security):
         if time is None:
             time = (self.expiry - np.datetime64('nat')).astype(int)
         else:
-            time = (self.expiry - time).astype(int)
+            time = (self.expiry - time)
         if model == 'black':
             return pt.integrate_probability(P, lambda p: opt.black_scholes(self.strike, time, r, sigma, p,
                                                                            option_type=self.option_type))
 
 
 class Equity(Security):
-    def __init__(self, ticker, current_price):
+    def __init__(self, ticker):
         Security.__init__(self, ticker)
-        self.current_price = current_price
 
     def value(self, price, time, **kwargs):
         return price
+
+    def prob_weighted_val(self, P, time, **kwargs):
+        return pt.integrate_probability(P, lambda p: p)
 
     def delta(self, price, time, accuracy=0.01):
         return accuracy
 
 
 class Portfolio:
-    def __init__(self, securities, r):
-        assert all(isinstance(s, Security) for s in securities)
+    def __init__(self, securities, types, r):
         self.r = r
-        self.securities = []
-        self.types = []
+        self.securities = securities
+        self.types = types
+
+    @classmethod
+    def from_securities(cls, securities, r):
+        assert all(isinstance(s, Security) for s in securities)
+        secs = []
+        types = []
         for s in securities:
             if isinstance(s, Option):
-                securities.append((s, random.uniform(low=-1, high=1)))
-                self.types.append(s.option_type)
+                secs.append((s, random.uniform(low=-1, high=1)))
+                types.append(s.option_type)
             else:
-                securities.append((s, random.uniform(low=0, high=1)))
-                self.types.append(s.ticker)
+                secs.append((s, random.uniform(low=0, high=1)))
+                types.append(s.ticker)
+        return cls(securities=secs, types=types, r=r)
+
+    @classmethod
+    def from_serialization(cls, serialization, types, r, ticker):
+        securities = []
+        pos = 0
+        for sec_type in types:
+            if sec_type == 'call' or sec_type == 'put':
+                sec = Option(ticker, sec_type, serialization[pos + 1], serialization[pos + 2])
+                securities.append((sec, serialization[pos]))
+                pos += 3
+            else:
+                sec = Equity(ticker)
+                securities.append((sec, serialization[pos]))
+                pos += 1
+        return cls(securities=securities, types=types, r=r)
 
     def value(self, P, time, implied_volatility):
         val = 0
@@ -90,16 +121,17 @@ class Portfolio:
 
         print("-------------------------------------------------------------------------------------------")
 
-    @property
-    def serialize(self):
+    def serialize(self, date_relative_to):
         options = []
         securities = []
+        types = []
         for s, w in self.securities:
             if isinstance(s, Option):
                 options.append(w)
                 options.append(s.strike)
-                options.append(s.expiry)
+                options.append((s.expiry - date_relative_to).astype(int))
+                types.append(s.option_type)
             else:
                 securities.append(w)
-                securities.append(s.ticker)
-        return options + securities
+                types.append('equity')
+        return options + securities, types

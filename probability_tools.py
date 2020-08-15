@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from scipy.stats import norm
 
 
 class ProbabilityDistribution:
@@ -36,3 +37,11 @@ def integrate_probability(distribution, f, dx=0.05):
     def element_weighting(x):
         return distribution.P(x) * f(x)
     return riemman_sum(element_weighting, domain=distribution.domain, dx=dx)
+
+
+def basic_normal_pdf(x, center, std):
+    return norm.pdf(x, loc=center, scale=std)
+
+
+def basic_normal_cdf(x, center, std):
+    return norm.cdf(x, loc=center, scale=std)
