@@ -72,7 +72,7 @@ def avg_volatility(date, df):
     :param df: yahoo_finance_pandas dataframe (calls or puts)
     :return: float representing the average volatility
     """
-    return df.loc[(df['expiration'] >= date - 2) & (df['expiration'] <= date + 2)]['impliedVolatility'].mean()
+    return df.loc[(df['expiration'] >= date - 4) & (df['expiration'] <= date + 4)]['impliedVolatility'].mean()
 
 
 def optimize(portfolio, P, current_price, today, later, ticker, puts_calls=None):
